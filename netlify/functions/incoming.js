@@ -1,52 +1,46 @@
 const { createClient } = require('@supabase/supabase-js');
 
 exports.handler = async (event, context) => {
-  // 1. Only accept POST requests from Twilio
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: 'Method Not Allowed' };
-  }
+  const params = new URLSearchParams(event.body);
+  const incomingNumber = params.get('From');
+  const messageText = params.get('Body').trim();
 
-  try {
-    // 2. Parse the incoming text message data
-    const params = new URLSearchParams(event.body);
-    const incomingNumber = params.get('From');
-    const messageText = params.get('Body');
+  const supabase = createClient(
+    process.env.SUPABASE_URL, 
+    process.env.SUPABASE_ANON_KEY
+  );
 
-    // 3. Connect to the Supabase Brain
-    const supabase = createClient(
-      process.env.SUPABASE_URL, 
-      process.env.SUPABASE_ANON_KEY
-    );
+  // Ensure user exists
+  await supabase.from('users').upsert({ phone_number: incomingNumber }, { ignoreDuplicates: true });
 
-    // 4. Ensure the user exists in the system (Ignore if they already do)
-    await supabase
-      .from('users')
-      .upsert({ phone_number: incomingNumber }, { ignoreDuplicates: true });
-
-    // 5. Save the actual task into the Breadcrumbs table
-    await supabase
+  // COMMAND: List tasks
+  if (messageText.toLowerCase() === 'list') {
+    const { data: tasks } = await supabase
       .from('breadcrumbs')
-      .insert({
-        phone_number: incomingNumber,
-        message: messageText
-      });
+      .select('message')
+      .eq('phone_number', incomingNumber)
+      .eq('status', 'pending');
 
-    // 6. Build the XML reply for Twilio to send back to your phone
-    const xmlResponse = `
-      <?xml version="1.0" encoding="UTF-8"?>
-      <Response>
-          <Message>Breadcrumb saved: "${messageText}"</Message>
-      </Response>
-    `.trim();
+    const taskList = tasks.length > 0 
+      ? tasks.map((t, i) => `${i + 1}. ${t.message}`).join('\n')
+      : "No pending tasks.";
 
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'text/xml' },
-      body: xmlResponse
+      body: `<Response><Message>${taskList}</Message></Response>`
     };
-
-  } catch (error) {
-    console.error('Error saving breadcrumb:', error);
-    return { statusCode: 500, body: 'Internal Server Error' };
   }
+
+  // DEFAULT: Save task
+  await supabase.from('breadcrumbs').insert({
+    phone_number: incomingNumber,
+    message: messageText
+  });
+
+  return {
+    statusCode: 200,
+    headers: { 'Content-Type': 'text/xml' },
+    body: `<Response><Message>Breadcrumb saved: "${messageText}"</Message></Response>`
+  };
 };
