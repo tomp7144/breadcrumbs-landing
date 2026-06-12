@@ -1,0 +1,6 @@
+[build]
+  functions = "netlify/functions"
+
+[[functions]]
+  path = "remind"
+  schedule = "@hourly"
