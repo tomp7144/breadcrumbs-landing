@@ -3,4 +3,4 @@
 
 [[functions]]
   path = "remind"
-  schedule = "@hourly"
+  schedule = "44 * * * *"
