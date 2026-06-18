@@ -1,6 +1,6 @@
 [build]
   functions = "netlify/functions"
 
-[[functions]]
+[functions]
   path = "lifecycle"
   schedule = "0 9 * * *"
