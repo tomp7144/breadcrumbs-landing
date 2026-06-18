@@ -2,5 +2,5 @@
   functions = "netlify/functions"
 
 [[functions]]
-  path = "remind"
-  schedule = "44 * * * *"
+  path = "lifecycle"
+  schedule = "0 9 * * *"
