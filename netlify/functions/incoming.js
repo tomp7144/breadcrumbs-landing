@@ -62,37 +62,41 @@ exports.handler = async (event) => {
 
   // --- Recall branch ---
   if (RECALL_RE.test(body)) {
-    const { data: row } = await supabase
+    const { data: rows } = await supabase
       .from('breadcrumbs')
       .select('encrypted_message, last_updated_at')
       .eq('phone_number', from)
       .eq('status', 'active')
-      .maybeSingle();
+      .order('last_updated_at', { ascending: false });
 
-    if (!row) {
+    if (!rows || rows.length === 0) {
       return twimlReply(
         "nothing saved right now. text me what you're working on and i'll hold it for you."
       );
     }
 
-    let parsed;
-    try {
-      parsed = decrypt(row.encrypted_message);
-    } catch (err) {
-      console.error('decrypt failed on recall:', err.message);
-      return twimlReply("i have something saved for you but couldn't read it. text me what you're working on to reset.");
+    const labels = [];
+    for (const row of rows) {
+      try {
+        const parsed = decrypt(row.encrypted_message);
+        const label = parsed.what_working_on || parsed.current_thought || parsed.next_step || parsed.open_question;
+        if (label) labels.push(label.toLowerCase());
+      } catch (err) {
+        console.error('decrypt failed on recall:', err.message);
+      }
     }
 
-    const parts = [
-      parsed.what_working_on && `you were working on: ${parsed.what_working_on}`,
-      parsed.current_thought && `your thought: ${parsed.current_thought}`,
-      parsed.next_step && `next up: ${parsed.next_step}`,
-      parsed.open_question && `still open: ${parsed.open_question}`,
-    ].filter(Boolean);
+    if (labels.length === 0) {
+      return twimlReply("i have things saved for you but couldn't read them. text me what you're working on to start fresh.");
+    }
 
-    const recap = parts.length > 0
-      ? parts.join('. ') + '. you\'re good — go.'
-      : "you left something here but i couldn't make out the details. text me what you're working on to reset.";
+    const total = rows.length;
+    const shown = labels.slice(0, 5);
+    const overflow = total > 5 ? ` (showing 5 of ${total})` : '';
+
+    const recap = shown.length === 1
+      ? `you were working on: ${shown[0]}. you're good — go.`
+      : `you've got ${total} thing${total !== 1 ? 's' : ''} going${overflow}: ${shown.join(', ')}. you're good — go.`;
 
     return twimlReply(recap);
   }
@@ -128,28 +132,12 @@ Set any field to null if it isn't in the message. Output pure JSON only — no m
 
   const encryptedMessage = encrypt(parsedData);
 
-  // Upsert: check for an existing active row, then update or insert.
-  // Manual select-then-write because Supabase's .upsert() doesn't cleanly
-  // target partial unique indexes in all versions of the JS client.
-  const { data: existing } = await supabase
+  // Every inbound message becomes its own new row — no unique constraint on
+  // phone_number in the new schema, so a straight insert is correct.
+  const { error } = await supabase
     .from('breadcrumbs')
-    .select('id')
-    .eq('phone_number', from)
-    .eq('status', 'active')
-    .maybeSingle();
-
-  if (existing) {
-    const { error } = await supabase
-      .from('breadcrumbs')
-      .update({ encrypted_message: encryptedMessage, last_updated_at: new Date().toISOString() })
-      .eq('id', existing.id);
-    if (error) console.error('Supabase update error:', error);
-  } else {
-    const { error } = await supabase
-      .from('breadcrumbs')
-      .insert({ phone_number: from, encrypted_message: encryptedMessage });
-    if (error) console.error('Supabase insert error:', error);
-  }
+    .insert({ phone_number: from, encrypted_message: encryptedMessage });
+  if (error) console.error('Supabase insert error:', error);
 
   // Reply in Breadcrumbs' voice: lowercase, brief, references what they said.
   const ref = parsedData.what_working_on
