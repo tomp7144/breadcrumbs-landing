@@ -62,11 +62,11 @@ function captureAck(gist) {
 // purpose — and logged loudly so a silent drop here never masquerades as fine.
 function recallFallback(labels) {
   if (labels.length === 1) {
-    return `you left off on ${labels[0]}. that's the thread — pick it up.`;
+    return `you left off on ${labels[0]}. anything else to hold onto?`;
   }
   const shown = labels.slice(0, 5);
   const overflow = labels.length > 5 ? ` (5 of ${labels.length})` : '';
-  return `a few going${overflow}, most recent first: ${shown.join(', ')}. back to the top one.`;
+  return `a few going${overflow}, most recent first: ${shown.join(', ')}. want me to add anything?`;
 }
 
 const RECALL_SYSTEM = `You are the voice of Breadcrumbs, an SMS tool that holds someone's place while they switch tasks. They just texted asking where they left off. You're given their saved notes, most recent first. Reply with ONE short SMS that reorients them.
@@ -76,9 +76,10 @@ Voice: casual, lowercase, dry, like a sharp friend texting back. Contractions an
 Rules:
 - lead with the actual substance of what they were doing
 - if there are several notes, weave them into one line, most recent first
-- end with a light nudge back in, and vary that closer
+- end with an open, optional offer — never tell them what to do, never imply they should get back to work. think "anything else to hold onto?" or "want me to add anything?", and vary it every time
 - 1-2 lines max, always SMS-length
 - never write "you were working on:" and never echo a bulleted list
+- never use directive or back-to-work closers like "back to it?", "pick it up", "that's the thread", "go", or "you're good"
 - never invent anything that isn't in the notes`;
 
 exports.handler = async (event) => {
