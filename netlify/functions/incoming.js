@@ -3,6 +3,8 @@ const Anthropic = require('@anthropic-ai/sdk');
 const twilio = require('twilio');
 const { encrypt, decrypt } = require('./lib/crypto');
 
+const MODEL = 'claude-haiku-4-5-20251001';
+
 // Patterns that indicate the user wants to recall their breadcrumb.
 const RECALL_RE = /\b(where was i|where am i|what was i doing|what am i working on|what was i working on|recap|catch me up|bring me back|what did i have)\b/i;
 
@@ -29,6 +31,55 @@ function emptyTwiml() {
     body: '<Response></Response>',
   };
 }
+
+function pick(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// Capture acks. Local, instant, no API dependency — these stay human even when
+// the Anthropic call fails. With a short gist we weave it in; without one we
+// keep it clean and never echo the whole message back.
+function captureAck(gist) {
+  if (gist) {
+    return pick([
+      `got it — ${gist}. saved.`,
+      `saved: ${gist}. go do your thing.`,
+      `down. ${gist} is in the buffer.`,
+      `${gist} — saved. pick it up whenever.`,
+      `locked in: ${gist}. come back when you're ready.`,
+    ]);
+  }
+  return pick([
+    'got it. saved.',
+    "saved — it'll be here.",
+    'noted. go do your thing.',
+    'in the buffer. come back whenever.',
+    'saved that one. picks back up when you do.',
+  ]);
+}
+
+// Recall fallback, used only if the Claude synthesis call fails. Kept plain on
+// purpose — and logged loudly so a silent drop here never masquerades as fine.
+function recallFallback(labels) {
+  if (labels.length === 1) {
+    return `you left off on ${labels[0]}. that's the thread — pick it up.`;
+  }
+  const shown = labels.slice(0, 5);
+  const overflow = labels.length > 5 ? ` (5 of ${labels.length})` : '';
+  return `a few going${overflow}, most recent first: ${shown.join(', ')}. back to the top one.`;
+}
+
+const RECALL_SYSTEM = `You are the voice of Breadcrumbs, an SMS tool that holds someone's place while they switch tasks. They just texted asking where they left off. You're given their saved notes, most recent first. Reply with ONE short SMS that reorients them.
+
+Voice: casual, lowercase, dry, like a sharp friend texting back. Contractions and fragments are fine. No emoji. No "yo", "dude", "let's go", or any hype.
+
+Rules:
+- lead with the actual substance of what they were doing
+- if there are several notes, weave them into one line, most recent first
+- end with a light nudge back in, and vary that closer
+- 1-2 lines max, always SMS-length
+- never write "you were working on:" and never echo a bulleted list
+- never invent anything that isn't in the notes`;
 
 exports.handler = async (event) => {
   // Twilio signature validation — reject anything that isn't a legitimate Twilio request.
@@ -59,6 +110,7 @@ exports.handler = async (event) => {
   }
 
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
   // --- Recall branch ---
   if (RECALL_RE.test(body)) {
@@ -79,33 +131,55 @@ exports.handler = async (event) => {
     for (const row of rows) {
       try {
         const parsed = decrypt(row.encrypted_message);
-        const label = parsed.what_working_on || parsed.current_thought || parsed.next_step || parsed.open_question;
-        if (label) labels.push(label.toLowerCase());
+        const label =
+          parsed.gist ||
+          parsed.what_working_on ||
+          parsed.current_thought ||
+          parsed.next_step ||
+          parsed.open_question;
+        if (label) labels.push(String(label).toLowerCase());
       } catch (err) {
         console.error('decrypt failed on recall:', err.message);
       }
     }
 
     if (labels.length === 0) {
-      return twimlReply("i have things saved for you but couldn't read them. text me what you're working on to start fresh.");
+      return twimlReply(
+        "i have things saved for you but couldn't read them. text me what you're working on to start fresh."
+      );
     }
 
-    const total = rows.length;
-    const shown = labels.slice(0, 5);
-    const overflow = total > 5 ? ` (showing 5 of ${total})` : '';
+    // Cap what we hand the model; most-recent-first is already guaranteed by the query order.
+    const forModel = labels.slice(0, 8);
 
-    const recap = shown.length === 1
-      ? `you were working on: ${shown[0]}. you're good — go.`
-      : `you've got ${total} thing${total !== 1 ? 's' : ''} going${overflow}: ${shown.join(', ')}. you're good — go.`;
+    let recap;
+    try {
+      const msg = await anthropic.messages.create({
+        model: MODEL,
+        max_tokens: 80,
+        system: RECALL_SYSTEM,
+        messages: [
+          {
+            role: 'user',
+            content: `Saved notes (most recent first):\n${forModel.map((l) => `- ${l}`).join('\n')}`,
+          },
+        ],
+      });
+      recap = (msg.content[0].text || '').trim();
+      if (!recap) throw new Error('empty model response');
+    } catch (err) {
+      // LOUD — a silent fall to the template is exactly the failure mode we don't want hidden.
+      console.error('RECALL CLAUDE FAILED — using template fallback:', err.message);
+      recap = recallFallback(labels);
+    }
 
     return twimlReply(recap);
   }
 
   // --- Parse and store branch ---
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
   const systemPrompt = `You extract core context from a user's raw, stream-of-consciousness message.
-Return ONLY a valid JSON object with these four nullable string fields:
+Return ONLY a valid JSON object with these five fields:
+- gist: a 2-5 word, lowercase summary of what they're on (e.g. "breadcrumbs + f1 delta"). null if unclear.
 - what_working_on: the main task or project they are in the middle of
 - current_thought: the specific thing on their mind right now
 - next_step: what they were about to do next (if mentioned)
@@ -113,20 +187,29 @@ Return ONLY a valid JSON object with these four nullable string fields:
 
 Set any field to null if it isn't in the message. Output pure JSON only — no markdown, no explanation.`;
 
-  let parsedData = { what_working_on: null, current_thought: null, next_step: null, open_question: null };
+  let parsedData = {
+    gist: null,
+    what_working_on: null,
+    current_thought: null,
+    next_step: null,
+    open_question: null,
+  };
+  let parseOk = false;
 
   try {
     const msg = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: MODEL,
       max_tokens: 400,
       system: systemPrompt,
       messages: [{ role: 'user', content: body }],
     });
-    parsedData = JSON.parse(msg.content[0].text);
+    const out = JSON.parse(msg.content[0].text);
+    parsedData = { ...parsedData, ...out };
+    parseOk = true;
   } catch (err) {
     // If Claude fails or returns non-JSON, fall back: store the raw message in
-    // what_working_on so nothing is lost, rather than crashing.
-    console.error('Claude parse failed, storing raw fallback:', err.message);
+    // what_working_on so nothing is lost. No gist, so the ack stays clean.
+    console.error('PARSE CLAUDE FAILED — storing raw fallback:', err.message);
     parsedData.what_working_on = body;
   }
 
@@ -139,14 +222,9 @@ Set any field to null if it isn't in the message. Output pure JSON only — no m
     .insert({ phone_number: from, encrypted_message: encryptedMessage });
   if (error) console.error('Supabase insert error:', error);
 
-  // Reply in Breadcrumbs' voice: lowercase, brief, references what they said.
-  const ref = parsedData.what_working_on
-    ? parsedData.what_working_on.toLowerCase()
-    : null;
+  // Only feed a gist into the ack if the parse actually succeeded and produced a
+  // short one — never the full raw body, which is what made it sound robotic.
+  const gist = parseOk && parsedData.gist ? String(parsedData.gist).toLowerCase() : null;
 
-  const reply = ref
-    ? `saved. ${ref} will be here when you get back.`
-    : "saved. text me when you're ready to pick back up.";
-
-  return twimlReply(reply);
+  return twimlReply(captureAck(gist));
 };

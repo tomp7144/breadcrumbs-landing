@@ -21,7 +21,9 @@ exports.handler = async () => {
     let summary = 'something you were working on';
     try {
       const parsed = decrypt(row.encrypted_message);
-      summary = parsed.what_working_on || parsed.current_thought || summary;
+      // Prefer the short gist (set on capture); fall back for older rows that
+      // predate the gist field.
+      summary = parsed.gist || parsed.what_working_on || parsed.current_thought || summary;
     } catch (err) {
       console.error(`decrypt failed for row ${row.id}:`, err.message);
     }
