@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Breadcrumbs — what to expect</title>
+<meta name="description" content="text it whatever's in your head. it holds your place so you can pick back up." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --ink: #15120E;
+    --paper: #F5F3EF;
+    --bubble-in: #ECEAE6;
+    --green: #1FA463;        /* sent bubbles + primary action */
+    --green-deep: #167A4A;
+    --trail: #C9912E;        /* breadcrumb-dot accent */
+    --muted: #6E665C;
+    --line: #E2DED7;
+    --display: "Bricolage Grotesque", system-ui, sans-serif;
+    --body: "Instrument Sans", system-ui, sans-serif;
+    --sms: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--body);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    padding: 0 22px;
+  }
+  .wrap { max-width: 600px; margin: 0 auto; }
+
+  /* ---- header / hero ---- */
+  header { padding: 56px 0 8px; }
+  .mark {
+    font-family: var(--display);
+    font-weight: 800;
+    font-size: 19px;
+    letter-spacing: -0.02em;
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+  }
+  .mark .crumbs { display: inline-flex; gap: 4px; align-items: center; }
+  .mark .crumbs i { width: 6px; height: 6px; border-radius: 50%; background: var(--trail); display: block; }
+  .mark .crumbs i:nth-child(2) { width: 5px; height: 5px; opacity: .8; }
+  .mark .crumbs i:nth-child(3) { width: 4px; height: 4px; opacity: .6; }
+
+  .eyebrow {
+    font-size: 13px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--trail); margin: 48px 0 14px;
+  }
+  h1 {
+    font-family: var(--display);
+    font-weight: 800;
+    font-size: clamp(38px, 11vw, 58px);
+    line-height: 0.98;
+    letter-spacing: -0.035em;
+    margin-bottom: 22px;
+  }
+  h1 .soft { color: var(--muted); }
+  .lede { font-size: 18px; color: var(--muted); max-width: 42ch; margin-bottom: 36px; }
+
+  /* ---- sms thread ---- */
+  .thread {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    padding: 20px 16px 22px;
+    font-family: var(--sms);
+    box-shadow: 0 1px 0 rgba(0,0,0,.02), 0 18px 40px -28px rgba(21,18,14,.35);
+  }
+  .thread .who { text-align: center; font-size: 12px; color: var(--muted); margin-bottom: 16px; }
+  .row { display: flex; margin: 7px 0; }
+  .row.out { justify-content: flex-end; }
+  .bub {
+    max-width: 76%;
+    padding: 9px 14px;
+    border-radius: 19px;
+    font-size: 15.5px;
+    line-height: 1.35;
+    opacity: 0;
+    transform: translateY(7px);
+    animation: pop .5s cubic-bezier(.2,.8,.2,1) forwards;
+  }
+  .out .bub { background: var(--green); color: #fff; border-bottom-right-radius: 6px; }
+  .in .bub { background: var(--bubble-in); color: var(--ink); border-bottom-left-radius: 6px; }
+  .row:nth-child(2) .bub { animation-delay: .15s; }
+  .row:nth-child(3) .bub { animation-delay: .55s; }
+  .row:nth-child(4) .bub { animation-delay: 1.0s; }
+  .row:nth-child(5) .bub { animation-delay: 1.45s; }
+  @keyframes pop { to { opacity: 1; transform: none; } }
+
+  /* ---- trail divider ---- */
+  .trail-rule { display: flex; gap: 9px; justify-content: center; align-items: center; margin: 52px 0; }
+  .trail-rule i { width: 6px; height: 6px; border-radius: 50%; background: var(--trail); opacity: .55; }
+  .trail-rule i:nth-child(odd) { width: 4px; height: 4px; opacity: .35; }
+
+  /* ---- sections ---- */
+  section h2 {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 25px;
+    letter-spacing: -0.02em;
+    margin-bottom: 8px;
+  }
+  section p { color: var(--muted); font-size: 16.5px; max-width: 50ch; }
+  section p .ex { color: var(--ink); }
+  .block { margin: 30px 0; }
+
+  /* ---- plans ---- */
+  .plans { margin-top: 8px; }
+  .plan {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 14px;
+    border: 1px solid var(--line); border-radius: 15px; background: #fff;
+    padding: 16px 18px; margin-bottom: 11px; text-decoration: none; color: inherit;
+    transition: border-color .15s ease, transform .15s ease;
+  }
+  a.plan:hover { border-color: var(--green); transform: translateY(-1px); }
+  .plan .meta { display: flex; flex-direction: column; gap: 2px; }
+  .plan .name { font-family: var(--display); font-weight: 700; font-size: 18px; letter-spacing: -0.01em; }
+  .plan .cap { font-size: 14px; color: var(--muted); }
+  .plan .price { font-family: var(--display); font-weight: 700; font-size: 17px; white-space: nowrap; }
+  .plan .price small { font-weight: 500; color: var(--muted); font-size: 13px; }
+  .plan.free { background: #FBF6EA; border-color: #EAD9AE; }
+  .plan.free .price { color: var(--trail); }
+
+  .cta {
+    display: inline-block; margin: 4px 0 8px;
+    background: var(--green); color: #fff; text-decoration: none;
+    font-weight: 600; font-size: 17px;
+    padding: 15px 26px; border-radius: 13px;
+    transition: background .15s ease;
+  }
+  .cta:hover { background: var(--green-deep); }
+  .cta small { display: block; font-weight: 400; font-size: 13px; opacity: .85; margin-top: 2px; }
+
+  footer { color: var(--muted); font-size: 13px; padding: 50px 0 60px; border-top: 1px solid var(--line); margin-top: 56px; }
+  footer a { color: var(--muted); }
+
+  a:focus-visible, .plan:focus-visible { outline: 3px solid var(--green); outline-offset: 3px; border-radius: 8px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bub { animation: none; opacity: 1; transform: none; }
+    html { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <span class="mark">Breadcrumbs <span class="crumbs"><i></i><i></i><i></i></span></span>
+
+    <p class="eyebrow">What to expect</p>
+    <h1>You text it.<br><span class="soft">It holds your place.</span></h1>
+    <p class="lede">Drop whatever's in your head into a text. When you come back lost, ask where you were — and pick it right back up.</p>
+
+    <div class="thread" aria-label="example text conversation">
+      <p class="who">+1 (906) 224-2246</p>
+      <div class="row out"><div class="bub">Finishing the deck before the 2pm call</div></div>
+      <div class="row in"><div class="bub">Got it — deck before 2pm. Saved.</div></div>
+      <div class="row out"><div class="bub">where was i</div></div>
+      <div class="row in"><div class="bub">You were on the deck for your 2pm. Anything else to hold onto?</div></div>
+    </div>
+  </header>
+
+  <div class="trail-rule" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+
+  <section>
+    <div class="block">
+      <h2>Save anything</h2>
+      <p>Text the number whatever you're on, worried about, or about to forget. No format, no commands — just dump it. <span class="ex">"Need to email the inspector back."</span> It saves it and gets out of your way.</p>
+    </div>
+
+    <div class="block">
+      <h2>Get it back</h2>
+      <p>Lost the thread? Text <span class="ex">"Where was I"</span> (or "Recap," "Catch me up") and it hands you back what you were on, most recent first.</p>
+    </div>
+
+    <div class="block">
+      <h2>No nagging</h2>
+      <p>No streaks, no guilt, no "you haven't texted in 3 days." It won't even reply when you're just being polite — say "thanks" and it stays quiet.</p>
+    </div>
+
+    <div class="block">
+      <h2>It's private</h2>
+      <p>Everything you text is encrypted. Not even the person who built it can casually read your messages.</p>
+    </div>
+  </section>
+
+  <div class="trail-rule" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+
+  <section class="plans">
+    <h2 style="margin-bottom:16px;">Plans</h2>
+
+    <div class="plan free">
+      <div class="meta">
+        <span class="name">Free trial</span>
+        <span class="cap">25 texts to see if it clicks</span>
+      </div>
+      <span class="price">$0</span>
+    </div>
+
+    <a class="plan" href="https://buy.stripe.com/cNi00cbUHf0ggHg6GV6Ri00">
+      <div class="meta">
+        <span class="name">Basic</span>
+        <span class="cap">200 texts / month</span>
+      </div>
+      <span class="price">$9<small> /mo</small></span>
+    </a>
+
+    <a class="plan" href="https://buy.stripe.com/00w4gs5wjf0g4Yyd5j6Ri01">
+      <div class="meta">
+        <span class="name">Pro</span>
+        <span class="cap">600 texts / month</span>
+      </div>
+      <span class="price">$19<small> /mo</small></span>
+    </a>
+
+    <a class="plan" href="https://buy.stripe.com/7sY28k7Er9FWfDc8P36Ri02">
+      <div class="meta">
+        <span class="name">Unlimited</span>
+        <span class="cap">For when you really lean on it</span>
+      </div>
+      <span class="price">$49<small> /mo</small></span>
+    </a>
+
+    <p style="color:var(--muted); font-size:14px; margin-top:14px;">You'll always get a heads-up before you hit a limit — never a surprise cutoff.</p>
+  </section>
+
+  <div class="trail-rule" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+
+  <section style="text-align:center;">
+    <h2 style="margin-bottom:14px;">Leave yourself a crumb</h2>
+    <a class="cta" href="sms:+19062242246">Text 906-224-2246<small>Your first 25 are free</small></a>
+  </section>
+
+  <footer>
+    Breadcrumbs · SMS memory buffer · Msg &amp; data rates may apply<br />
+    Text STOP to opt out, HELP for help.
+  </footer>
+
+</div>
+</body>
+</html>

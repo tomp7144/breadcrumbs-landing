@@ -30,7 +30,7 @@ exports.handler = async () => {
 
     try {
       await twilioClient.messages.create({
-        body: `clearing my desk — you left this here: "${summary}". i'll hang onto it a bit longer in case you need it.`,
+        body: `Clearing some space — you left this here: "${summary}". I'll hang onto it a bit longer in case you need it.`,
         from: process.env.TWILIO_PHONE_NUMBER,
         to: row.phone_number,
       });
